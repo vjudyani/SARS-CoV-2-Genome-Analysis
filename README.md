@@ -168,12 +168,6 @@ MS Bioinformatics | Bioinformatics Analyst
 
 ---
 
-## License
-
-This project is licensed under the [CC BY-NC-SA 4.0 License](https://creativecommons.org/licenses/by-nc-sa/4.0/).
-
----
-
 ## References
 
 - Wu et al. (2020). A new coronavirus associated with human respiratory disease in China. *Nature*, 579, 265-269.
