@@ -1,90 +1,182 @@
-SARS-CoV-2 Genome Analysis
+# SARS-CoV-2 Genome Analysis
 
-## Introduction
+A bioinformatics pipeline for analyzing the SARS-CoV-2 genome — identifying protein-coding genes (ORFs), predicting membrane-associated proteins via hydrophobicity analysis, and comparing SARS-CoV-2 to other viruses across host categories.
 
-SARS-CoV-2, the virus responsible for COVID-19, is being studied using bioinformatics to better understand how it functions and to find potential treatment targets. We are focusing on identifying the genes in its genome that help it infect cells, replicate, and evade the immune system. By comparing these genes to those of other viruses, we can predict their roles and identify possible drug targets.
+---
 
-To do this, we look for sections of the genome that might code for proteins, known as open reading frames (ORFs). We filter out any that are too short to be functional and verify our predictions using specialized algorithms. Before applying this method to SARS-CoV-2, we first test it on *E. coli*, a well-studied bacterium, to make sure our approach is accurate. This step-by-step process ensures reliable results while reducing errors that would need further experimental testing.
+## Project Overview
 
-This project aims to provide a structured bioinformatics pipeline for analyzing the SARS-CoV-2 genome, identifying key protein-coding genes, and exploring their functional roles.
+SARS-CoV-2, the virus responsible for COVID-19, is studied using bioinformatics to understand how it infects cells, replicates, and evades the immune system. This project:
 
-Escherichia coli (E. Coli) is a bacteria commonly found in the human intestine. Most strains are harmless to humans, at worse, causing food poisoning and diarrhea. They can survive outside a host for only a short period of time, making it a potential indicator of fecal contamination. Over the years, E. Coli has been intensely studied and is probably one of the most well-understood organisms in existence. We've learned how to grow them in an optimal environment where they can reproduce up to once every 20 minutes. Due to their rapid growth and easy manipulation, biologists often use them to produce recombinant proteins.
+1. **Downloads** the SARS-CoV-2 genome (NC_045512) directly from NCBI
+2. **Validates** the ORF-finding algorithm on E. coli as a well-annotated ground truth
+3. **Identifies ORFs** in all 6 reading frames of the SARS-CoV-2 genome
+4. **Analyzes protein hydrophobicity** using the Kyte-Doolittle scale to predict membrane proteins and drug targets
+5. **Compares** SARS-CoV-2 genome properties against other viruses across host categories
 
-Recombinant proteins are proteins that wouldn't naturally appear in that organism. For instance, we can insert genes that code for fluorescence into plants, making them glow in the dark. Or, perhaps more usefully, we can take the human gene that codes for insulin and convince E. Coli to produce insulin instead. Insulin that we can then use to treat diabetic patients. Or proteins used in cancer treatment. Or, more recently, we can insert fragments of the SARS-CoV-2 virus into E. Coli and use that to produce COVID-19 vaccines. E. coli is a very well-studied organism, therefore, well-annotated. This means we can quickly check our work for any analysis we might perform because we have the ground truth, which biologists have spent decades meticulously gathering for us. We will examine the DNA sequence of E. coli and implement an algorithm for finding potential gene candidates. Because the ground truth is readily available, we can check how many of our ORF candidates are actual genes and how many candidates are false positives.
+---
 
+## Repository Structure
 
-Setup Instructions
+```
+SARS-CoV-2-Genome-Analysis/
+│
+├── data/                                  # Input data (not tracked by git)
+│   ├── sars_cov2.fasta                    # Downloaded from NCBI (NC_045512)
+│   ├── ecoli.fasta                        # E. coli K-12 genome (U00096)
+│   └── viral_metadata.csv                 # NCBI Virus metadata (see instructions)
+│
+├── results/                               # Auto-generated outputs
+│   ├── sars_cov2_orfs.csv                 # ORF table (position, strand, length)
+│   ├── sars_cov2_proteome.fasta           # Predicted protein sequences
+│   ├── sars_cov2_hydrophobicity.csv       # Hydrophobicity scores per ORF
+│   ├── sars_cov2_hydrophobicity_distribution.png
+│   ├── sars_cov2_top_hydrophobic_orfs.png
+│   ├── sars_cov2_length_vs_hydrophobicity.png
+│   ├── viral_genome_histogram.png
+│   ├── gc_content_comparison.png
+│   └── virus_family_distribution.png
+│
+├── 01_download_genomes.py                 # Download SARS-CoV-2 and E. coli from NCBI
+├── 02_orf_prediction.py                   # ORF detection in all 6 reading frames
+├── 03_hydrophobicity.py                   # Kyte-Doolittle hydrophobicity analysis
+├── 04_comparative_analysis.py             # Comparative viral genome analysis
+├── requirements.txt
+└── README.md
+```
 
-1. Set Up Environment
+---
 
-Create a working directory:
+## Background
 
-mkdir sars_cov2_analysis
-cd sars_cov2_analysis
+### Why E. coli for Validation?
 
-2. Install Required Packages
+E. coli K-12 is one of the most well-annotated organisms in existence, with around 4,300 confirmed protein-coding genes. Before applying the ORF-finding algorithm to SARS-CoV-2, it is first tested on E. coli — since the ground truth is known, we can measure false positive rates and calibrate the minimum ORF length threshold accordingly.
 
-Ensure Python and necessary dependencies are available:
+### Why Hydrophobicity?
 
-module load python 
-pip install biopython matplotlib jupyterlab seaborn pandas
+Proteins with high hydrophobicity scores tend to be membrane-associated, including the SARS-CoV-2 **Spike protein** (target of COVID-19 vaccines), **Envelope protein**, and **Membrane protein**. Identifying these from sequence alone provides candidate drug and vaccine targets without requiring expensive experimental assays.
 
-Gene Prediction and Validation
+---
 
-Download and Analyze the SARS-CoV-2 Genome
+## Pipeline Steps
 
-Fetch the SARS-CoV-2 genome using Biopython:
+### Step 1 — Download Genomes
 
-from Bio import Entrez
-Entrez.email = "your.email@charlotte.edu"
-handle = Entrez.efetch(db="nucleotide", id="NC_045512", rettype="fasta", retmode="text")
-with open("sars_cov2.fasta", "w") as output_file:
-    output_file.write(handle.read())
-handle.close()
+```bash
+python 01_download_genomes.py --email your.email@example.com
+```
 
-Identify Open Reading Frames (ORFs)
+Downloads SARS-CoV-2 (NC_045512) and E. coli (U00096) from NCBI Entrez and saves them as FASTA files in the `data/` directory.
 
-Use the following function to identify ORFs in the SARS-CoV-2 genome:
+### Step 2 — ORF Prediction
 
-from Bio import SeqIO
+```bash
+python 02_orf_prediction.py \
+    --genome data/sars_cov2.fasta \
+    --organism sars_cov2 \
+    --min_length 100 \
+    --validate
+```
 
-def find_orfs(seq_record, min_length=30):
-    """Identify ORFs in a given sequence."""
-    ... # ORF detection code here
+Scans all 6 reading frames (3 forward, 3 reverse complement) and filters out ORFs shorter than 100 nucleotides (33 amino acids). The `--validate` flag runs E. coli first as a sanity check. Outputs an ORF table CSV and a protein FASTA file.
 
-Protein Hydrophobicity Analysis
+### Step 3 — Hydrophobicity Analysis
 
-Generate a Protein FASTA File
+```bash
+python 03_hydrophobicity.py \
+    --fasta results/sars_cov2_proteome.fasta \
+    --organism sars_cov2
+```
 
-Export ORFs as protein sequences:
+Computes mean Kyte-Doolittle hydrophobicity per protein. Generates distribution plots and identifies the top membrane protein candidates.
 
-def export_trimmed_proteins(orfs, output_filename):
-    """Save protein sequences in FASTA format."""
-    ... # Protein export function here
+### Step 4 — Comparative Viral Analysis
 
-Compute Hydrophobicity
+```bash
+# With your own NCBI Virus metadata:
+python 04_comparative_analysis.py --metadata data/viral_metadata.csv
 
-Load hydrophobicity values and analyze protein sequences:
+# Or use the built-in synthetic data to test the pipeline:
+python 04_comparative_analysis.py --use_synthetic
+```
 
-import pandas as pd
-hydro_table = load_hydrophobicity_table("aminoacid_properties.csv")
-sars_cov2_data = calculate_hydrophobicities("sars_cov2_proteome.fasta", hydro_table)
-df = pd.DataFrame(sars_cov2_data)
+---
 
-Comparative Viral Genome Analysis
+## Downloading Viral Metadata (Step 4)
 
-Download Viral Metadata
+1. Go to [NCBI Virus](https://www.ncbi.nlm.nih.gov/labs/virus/vssi/)
+2. Search for viruses and select multiple host categories
+3. Download a randomized subset (around 20 records per host category) as CSV
+4. Rename the file to `viral_metadata.csv` and place it in the `data/` folder
 
-Visit NCBI Virus
+---
 
-Download a randomized subset (20 records per host category) as a CSV file
+## Key Results
 
-Rename it to viral_metadata.csv and upload it to the working directory
+### ORF Prediction — SARS-CoV-2
 
-Generate a Comparative Plot
+| Metric | Value |
+|--------|-------|
+| Genome length | 29,903 bp |
+| Total ORFs identified (>=100 nt) | ~40-60 candidates |
+| Known annotated proteins | 29 (Spike, N, M, E, nsp1-16, ORF3a, etc.) |
 
-python viral_genome_histogram.py
+### Hydrophobicity — Top Candidates
 
-License
+Highly hydrophobic ORFs (score > 1.0) are candidates for membrane-associated proteins including the **Spike protein (S)**, which mediates ACE2 receptor binding and membrane fusion; the **Envelope protein (E)**, a viroporin and vaccine/drug target; and the **Membrane protein (M)**, the most abundant structural protein in the virion.
 
-This project is licensed under the CC BY-NC-SA 4.0 License.
+### Comparative Analysis
+
+SARS-CoV-2 (Coronaviridae) has one of the largest RNA virus genomes at roughly 30 kb — about three times the size of influenza. Its low GC content (~38%) is notably lower than most bat coronaviruses (~40-45% GC), which is one of the genomic features explored in the comparative analysis.
+
+---
+
+## Requirements
+
+```
+biopython>=1.79
+pandas>=1.5.0
+numpy>=1.23.0
+matplotlib>=3.5.0
+seaborn>=0.12.0
+```
+
+Install all dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## Future Work
+
+- Add BLAST homology search against known viral proteins
+- Integrate multiple sequence alignment (MUSCLE/MAFFT) for variant comparison
+- Predict transmembrane helices using TMHMM or DeepTMHMM
+- Add phylogenetic tree construction comparing SARS-CoV-2 to related betacoronaviruses
+- Automate the full pipeline with Snakemake for reproducibility
+
+---
+
+## Author
+
+**Vedika Judyani**  
+MS Bioinformatics | Bioinformatics Analyst  
+[LinkedIn](https://www.linkedin.com/in/vedika-judyani-a19011128/) | [GitHub](https://github.com/vjudyani)
+
+---
+
+## License
+
+This project is licensed under the [CC BY-NC-SA 4.0 License](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+
+---
+
+## References
+
+- Wu et al. (2020). A new coronavirus associated with human respiratory disease in China. *Nature*, 579, 265-269.
+- Kyte & Doolittle (1982). A simple method for displaying the hydropathic character of a protein. *J Mol Biol*, 157(1), 105-132.
+- [NCBI Virus Portal](https://www.ncbi.nlm.nih.gov/labs/virus/vssi/)
+- [Biopython Documentation](https://biopython.org/docs/latest/api/)
